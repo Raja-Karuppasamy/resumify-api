@@ -261,7 +261,7 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
             max_tokens=30
         )
         
-        name = response.choices.message.content.strip()
+        name = response.choices[0].message.content.strip()  # <-- FIXED THIS LINE
         name = name.replace('**', '').replace('*', '')
         name = name.strip('"').strip("'")
         
