@@ -1,0 +1,22 @@
+{
+  "rp__wZj9gdPftV1rv1h4jtPdxfinySkds3I8EbASOhgt-Y": {
+    "key": "rp__wZj9gdPftV1rv1h4jtPdxfinySkds3I8EbASOhgt-Y",
+    "user_id": "test-user",
+    "plan": "free",
+    "created_at": "2025-10-05T17:48:24.261398",
+    "is_active": true,
+    "monthly_limit": 100,
+    "current_usage": 0,
+    "last_reset": "2025-10-05T17:48:24.261398"
+  },
+  "rp_8YbGeKqmFCquFa4996vtAO2PC8os98F-v7H1txFri-g": {
+    "key": "rp_8YbGeKqmFCquFa4996vtAO2PC8os98F-v7H1txFri-g",
+    "user_id": "string",
+    "plan": "free",
+    "created_at": "2025-10-07T09:04:55.074808",
+    "is_active": true,
+    "monthly_limit": 100,
+    "current_usage": 0,
+    "last_reset": "2025-10-07T09:04:55.074808"
+  }
+}

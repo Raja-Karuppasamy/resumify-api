@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<!-- saved from url=(0039)https://opariffazman.com/sample-resume/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimal-ui">
+
+    <title>Richard Hendriks</title>
+
+    <style>
+    /* Template level */
+body {
+    font-family: Georgia, serif;
+    font-size: 11px;
+    display: flex;
+    justify-content: center;
+}
+
+#resume {
+    max-width: 800px;
+    width: 100%;
+    padding: 24px 48px;
+    box-sizing: border-box;
+}
+
+h1 {
+    font-size: 26px;
+    text-align: center;
+    margin: 5px;
+}
+
+h2 {
+    border-width: 1px;
+    border-style: none none solid none;
+    margin: 10px 0 2.5px 0;
+}
+
+section {
+    margin: 3px 0;
+}
+
+ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+a {
+    text-decoration: none;
+    color: black;
+}
+
+.item {
+    margin-top: 8px;
+}
+
+.item>.item-header {
+    float: left;
+    display: block;
+}
+
+.item>.item-header>.item-header-title {
+    font-weight: bold;
+}
+
+.item>.item-header>.item-header-subtitle {
+    font-style: italic;
+}
+
+.item>.item-details {
+    float: right;
+    text-align: right;
+}
+
+.item>.item-details>.item-details-title {
+    font-weight: bold;
+}
+
+.clearfix {
+    clear: both;
+}
+
+.centered {
+    text-align: center;
+}
+
+/* Section specific */
+/* basics */
+.vertical-separator {
+    text-align: center;
+    padding: 0 10px;
+}
+
+.vertical-separator:not(:first-child) {
+    border-left: 1px solid #000;
+    text-align: center;
+}
+
+/* Set some print settings. */
+@media print {
+    @page {
+        size: portrait;
+        margin: 5mm 5mm;
+    }
+    #resume {
+        max-width: 100%;
+        border: 0px;
+        background: #fff;
+        box-shadow: none;
+        -webkit-box-shadow: none;
+    }
+    body,
+    html,
+    #resume {
+        margin: 0px;
+        padding: 0px;
+    }
+    .controls {
+        display: none;
+    }
+}
+
+    </style>
+
+    </head>
+    <body>
+
+    <div id="resume">
+        <section id="basics">
+            <h1>Richard Hendriks</h1>
+            <div class="contact centered">
+        <span class="vertical-separator"><a href="mailto:richard.hendriks@piedpiper.com">richard.hendriks@piedpiper.com</a></span><span class="vertical-separator">(+60) 123xxxx</span><span class="vertical-separator">Palo Alto, US</span><span class="vertical-separator"><a href="http://piedpiper.com/">piedpiper.com</a></span>    </div>
+            <div class="summary">
+                <h2>Summary</h2>
+                <p>Richard hails from <strong>Tulsa</strong>. He has earned degrees from the University of Oklahoma and Stanford. (Go Sooners and Cardinals!) Before starting Pied Piper, he worked for <a href="http://www.hooli.xyz/">Hooli</a> as a part time software developer. While his work focuses on applied information theory, mostly optimizing lossless compression schema of both the length-limited and adaptive variants, his non-work interests range widely, everything from quantum computing to chaos theory. He could tell you about it, but THAT would NOT be a <em>“length-limited”</em> conversation!</p>
+            </div>
+        </section>
+        <section id="skills">
+            <h2>Skills</h2>
+            <ul class="item">
+                <li>
+                    <strong>Web Development</strong>: HTML, CSS, Javascript
+                </li>
+                <li>
+                    <strong>Compression</strong>: Mpeg, MP4, GIF
+                </li>
+            </ul>
+        </section>
+        <section id="work">
+            <h2>Work Experience</h2>
+        <div class="item">
+            <div class="item-header">
+                <div class="item-header-title">
+                    Pied Piper
+                </div>
+                <div class="item-header-subtitle">
+                    CEO/President
+                </div>
+            </div>
+            <div class="item-details">
+                <div class="date">
+                    Apr 2014 — Present
+                </div>
+            </div>
+            <div class="clearfix"></div>
+            
+                    <ul class="highlights">
+                        <li>Build an algorithm for artist to detect if their music was violating copy right infringement laws</li>
+                        <li>Successfully won <a href="https://techcrunch.com/event-type/disrupt/">Techcrunch Disrupt</a></li>
+                        <li>Optimized an algorithm that holds the current world record for Weisman Scores</li>
+                    </ul>
+        </div>
+        <div class="item">
+            <div class="item-header">
+                <div class="item-header-title">
+                    Hooli
+                </div>
+                <div class="item-header-subtitle">
+                    Senior Software Engineer
+                </div>
+            </div>
+            <div class="item-details">
+                <div class="date">
+                    Jan 2014 — Apr 2014
+                </div>
+            </div>
+            <div class="clearfix"></div>
+            
+                    <ul class="highlights">
+                        <li>Worked on optimizing the backend algorithms for <a href="http://www.hooli.xyz/">Hooli</a></li>
+                    </ul>
+        </div>
+        <div class="item">
+            <div class="item-header">
+                <div class="item-header-subtitle">
+                    Software Engineer
+                </div>
+            </div>
+            <div class="item-details">
+                <div class="date">
+                    Jan 2013 — Jan 2014
+                </div>
+            </div>
+            <div class="clearfix"></div>
+            
+                    <ul class="highlights">
+                        <li>Contributed bugfixes and smaller features for <a href="http://www.hooli.xyz/">Hooli</a></li>
+                    </ul>
+        </div>
+        </section>
+        <section id="volunteer">
+            <h2>Volunteering</h2>
+        <div class="item">
+            <div class="item-header">
+                <div class="item-header-title">
+                    CoderDojo
+                </div>
+                <div class="item-header-subtitle">
+                    Teacher
+                </div>
+            </div>
+            <div class="item-details">
+                <div class="date">
+                    Jan 2012 — Jan 2013
+                </div>
+            </div>
+            <div class="clearfix"></div>
+                    <div class="summary">
+                        <p>Global movement of free coding clubs for young people.</p>
+                    </div>
+            
+                    <ul class="highlights">
+                        <li>Awarded 'Teacher of the Month'</li>
+                    </ul>
+        </div>
+        </section>
+        <section id="education">
+            <h2>Education</h2>
+        <div class="item">
+            <div class="item-header">
+                <div class="item-header-title">
+                    Stanford
+                </div>
+                <div class="item-header-subtitle">
+                    B.S
+                </div>
+            </div>
+            <div class="item-details">
+                <div class="date">
+                    Jun 2011 — Jan 2014
+                </div>
+            </div>
+            <div class="clearfix"></div>
+                <ul class="courses">
+                    <li><strong>DB1101</strong> - Basic SQL</li>
+                    <li><strong>CS2011</strong> - Java Introduction</li>
+                </ul>
+        </div>
+        </section>
+        <section id="awards">
+            <h2>Awards &amp; Recognitions</h2>
+            <ul class="item">
+                <li>
+                    <strong>Digital Compression Pioneer Award</strong>: There is no spoon.
+                </li>
+            </ul>
+        </section>
+    <script defer="" src="./resume35.pdf_files/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon="{&quot;version&quot;:&quot;2024.11.0&quot;,&quot;token&quot;:&quot;6fd84b45a7c34c25a1fa75ffb8ca489a&quot;,&quot;r&quot;:1,&quot;server_timing&quot;:{&quot;name&quot;:{&quot;cfCacheStatus&quot;:true,&quot;cfEdge&quot;:true,&quot;cfExtPri&quot;:true,&quot;cfL4&quot;:true,&quot;cfOrigin&quot;:true,&quot;cfSpeedBrain&quot;:true},&quot;location_startswith&quot;:null}}" crossorigin="anonymous"></script>
+
+
+<a href="https://opariffazman.com/sample-resume/resume.pdf" target="_blank"><p>Download PDF</p></a>
+</div></body></html>
