@@ -8,9 +8,9 @@ from openai import OpenAI
 import os
 # Make OCR dependencies optional
 try:
-    import pytesseract
-    from pdf2image import convert_from_path
-    from PIL import Image
+    #import pytesseract
+    #from pdf2image import convert_from_path
+    #from PIL import Image
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
