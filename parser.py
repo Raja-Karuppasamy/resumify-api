@@ -1,5 +1,8 @@
+# Updated: Nov 12, 2025 - v2.0
 import re
 import json
+# ... rest of code
+
 import pdfplumber
 import docx
 from typing import Optional, List, Dict, Tuple
