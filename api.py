@@ -28,14 +28,19 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-API_KEYS = {
-    os.getenv("API_KEY", "demo_key_12345"): "free",
-}
+# Get API key from environment
+VALID_API_KEY = os.getenv("API_KEY", "demo_key_12345")
+
 
 def verify_api_key(x_api_key: str = Header(None)):
-    if x_api_key not in API_KEYS:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    return API_KEYS[x_api_key]
+    """Verify API key from header"""
+    if x_api_key is None:
+        raise HTTPException(status_code=401, detail="API key missing. Include X-API-Key header.")
+    
+    if x_api_key != VALID_API_KEY:
+        raise HTTPException(status_code=401, detail=f"Invalid API key. Received: {x_api_key}, Expected: {VALID_API_KEY}")
+    
+    return x_api_key
 
 
 @app.get("/")
@@ -59,6 +64,7 @@ async def parse_single(
     file: UploadFile = File(...),
     x_api_key: str = Header(None)
 ):
+    # Verify API key
     verify_api_key(x_api_key)
     
     if not file.filename.endswith('.pdf'):
@@ -94,6 +100,7 @@ async def parse_batch(
     files: List[UploadFile] = File(...),
     x_api_key: str = Header(None)
 ):
+    # Verify API key
     verify_api_key(x_api_key)
     
     if len(files) > 5:
@@ -125,3 +132,13 @@ async def parse_batch(
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+# Debug endpoint to check API key
+@app.get("/debug/check-key")
+async def check_key(x_api_key: str = Header(None)):
+    return {
+        "provided_key": x_api_key,
+        "expected_key": VALID_API_KEY,
+        "match": x_api_key == VALID_API_KEY
+    }
