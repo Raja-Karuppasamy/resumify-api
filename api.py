@@ -1,4 +1,7 @@
+# Resumify API v2.1 - Nov 12, 2025
 from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Request
+# ... rest of code
+
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
