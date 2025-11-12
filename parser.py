@@ -4,11 +4,18 @@ import pdfplumber
 import docx
 from typing import Optional, List, Dict, Tuple
 import statistics
-import pytesseract
-from pdf2image import convert_from_path
-from PIL import Image
 from openai import OpenAI
 import os
+# Make OCR dependencies optional
+try:
+    import pytesseract
+    from pdf2image import convert_from_path
+    from PIL import Image
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    print("OCR libraries not available. Scanned PDF support disabled.")
+
 
 # OpenAI client singleton
 _openai_client = None
@@ -472,12 +479,18 @@ def calculate_overall_confidence(name_conf: float, email_conf: float, phone_conf
 
 def extract_text_from_image(image_path: str) -> str:
     """Extract text from a single image file using OCR"""
+    if not OCR_AVAILABLE:
+        return "OCR not available"
+    
     img = Image.open(image_path)
     return pytesseract.image_to_string(img)
 
 
 def extract_text_from_scanned_pdf(pdf_path: str) -> str:
     """Extract text from scanned PDF using OCR"""
+    if not OCR_AVAILABLE:
+        return "OCR not available"
+    
     text = ""
     images = convert_from_path(pdf_path)
     for img in images:
