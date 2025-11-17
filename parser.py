@@ -1,11 +1,11 @@
-# Updated: Nov 17, 2025 - v2.3 (OCR + OpenAI fixes)
+# Updated: Nov 17, 2025 - v2.4 (OCR + OpenAI compat API)
 import re
 import json
 import pdfplumber
 import docx
 from typing import Optional, List, Dict, Tuple
 import statistics
-from openai import OpenAI
+import openai
 import os
 
 # Make OCR dependencies optional
@@ -18,9 +18,6 @@ except ImportError:
     OCR_AVAILABLE = False
     print("OCR libraries not available. Scanned PDF support disabled.")
 
-
-# OpenAI client singleton
-_openai_client = None
 
 # Regex patterns for extraction
 EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
@@ -92,15 +89,22 @@ SECTION_HEADERS = [
 ]
 
 
-def get_openai_client():
-    """Get or create OpenAI client"""
-    global _openai_client
-    if _openai_client is None:
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
-        _openai_client = OpenAI(api_key=api_key)
-    return _openai_client
+def ensure_openai_key():
+    """Set OpenAI API key on the compat `openai` module."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable is not set")
+    openai.api_key = api_key
+
+
+def _extract_content_from_choice(choice) -> str:
+    """Handle both dict-like and typed response objects."""
+    msg = choice.message
+    # new typed object has .content attribute
+    if hasattr(msg, "content"):
+        return msg.content
+    # dict-style
+    return msg["content"]
 
 
 def parse_resume_with_gpt(text: str) -> dict:
@@ -132,26 +136,22 @@ Return JSON with this EXACT structure:
 """
 
     try:
-        client = get_openai_client()
+        ensure_openai_key()
 
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=2000,
         )
 
-        # ✅ Correct access for OpenAI Python SDK 1.x
-        content = response.choices[0].message.content.strip()
-
-        # Remove accidental markdown
+        content = _extract_content_from_choice(response.choices[0]).strip()
         content = re.sub(r"```json|```", "", content).strip()
 
         return json.loads(content)
 
     except json.JSONDecodeError as e:
         print("GPT JSON decode error:", e)
-        # If model wrapped JSON in text, try to recover the first {...} block
         try:
             start = content.find("{")
             end = content.rfind("}")
@@ -252,7 +252,6 @@ def extract_phone(text: str) -> Tuple[Optional[str], float]:
     matches = re.findall(PHONE_REGEX, text)
     if matches:
         first = matches[0]
-        # Regex with groups can return tuple – flatten if needed
         if isinstance(first, tuple):
             phone = "".join(first)
         else:
@@ -268,8 +267,8 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
     sample = text[:600]
     
     try:
-        client = get_openai_client()
-        response = client.chat.completions.create(
+        ensure_openai_key()
+        response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{
                 "role": "user",
@@ -283,8 +282,7 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
             max_tokens=30
         )
         
-        # ✅ Use .content, consistent with main parser
-        name = response.choices[0].message.content.strip()
+        name = _extract_content_from_choice(response.choices[0]).strip()
         name = name.replace('**', '').replace('*', '')
         name = name.strip('"').strip("'")
         
@@ -309,7 +307,6 @@ def extract_name_fallback(text: str) -> Tuple[Optional[str], float]:
         words = line.split()
         if 2 <= len(words) <= 4:
             if all(w.isalpha() for w in words):
-                # Accept normal capitalised names too, not only ALLCAPS
                 return line, 0.7
     
     return None, 0.0
@@ -419,7 +416,6 @@ def extract_education(text: str) -> List[Dict]:
         if not lines:
             continue
         
-        # degree should be the first line
         degree = lines[0]
         institution = ""
         start_date = ""

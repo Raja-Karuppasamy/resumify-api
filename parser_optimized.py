@@ -1,21 +1,21 @@
 import json
 import re
 from typing import List, Dict
-from openai import OpenAI
+import openai
 import os
 
-# Singleton OpenAI client
-_openai_client = None
+def ensure_openai_key():
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is missing from environment variables")
+    openai.api_key = api_key
 
-def get_openai_client():
-    """Create or return global OpenAI client."""
-    global _openai_client
-    if _openai_client is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY is missing from environment variables")
-        _openai_client = OpenAI(api_key=api_key)
-    return _openai_client
+
+def _extract_content_from_choice(choice) -> str:
+    msg = choice.message
+    if hasattr(msg, "content"):
+        return msg.content
+    return msg["content"]
 
 
 def parse_resumes_batch(resume_texts: List[str]) -> List[Dict]:
@@ -27,7 +27,6 @@ def parse_resumes_batch(resume_texts: List[str]) -> List[Dict]:
     if len(resume_texts) > 5:
         raise ValueError("Maximum 5 resumes per batch")
 
-    # Build combined text
     batch_text = ""
     for i, text in enumerate(resume_texts):
         batch_text += (
@@ -36,7 +35,6 @@ def parse_resumes_batch(resume_texts: List[str]) -> List[Dict]:
             f"--- RESUME {i+1} END ---\n"
         )
 
-    # Unified batch prompt
     prompt = f"""
 Extract information from these {len(resume_texts)} resumes and return a JSON array.
 
@@ -64,19 +62,16 @@ RULES:
 """
 
     try:
-        client = get_openai_client()
+        ensure_openai_key()
 
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=4000
         )
 
-        # FIX: Correct extraction for openai==1.x
-        content = response.choices[0].message["content"].strip()
-
-        # Remove accidental markdown
+        content = _extract_content_from_choice(response.choices[0]).strip()
         content = re.sub(r"```json|```", "", content).strip()
 
         results = json.loads(content)
@@ -86,7 +81,6 @@ RULES:
         print("\n⚠️ Batch error:", e)
         print("→ Falling back to single-resume parser\n")
 
-        # Fallback calls (existing logic)
         from parser import parse_resume_with_gpt
         fallback_results = []
         for text in resume_texts:
