@@ -21,4 +21,4 @@ slowapi==0.1.7
 
 # DOCX + OpenAI
 python-docx==0.8.11
-openai==1.3.5
+openai==0.28.1
