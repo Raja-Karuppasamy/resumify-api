@@ -1,19 +1,18 @@
-# Updated: Nov 12, 2025 - v2.0
+# Updated: Nov 17, 2025 - v2.1 (OCR Support Added)
 import re
 import json
-# ... rest of code
-
 import pdfplumber
 import docx
 from typing import Optional, List, Dict, Tuple
 import statistics
 from openai import OpenAI
 import os
+
 # Make OCR dependencies optional
 try:
-    #import pytesseract
-    #from pdf2image import convert_from_path
-    #from PIL import Image
+    import pytesseract
+    from pdf2image import convert_from_path
+    from PIL import Image
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
@@ -166,16 +165,13 @@ RULES:
         
         json_str = response.choices[0].message.content.strip()
 
-            # Clean any markdown formatting
-        json_str = re.sub(r'`{3}(?:json)?\s*', '', json_str)  # Remove ``````json
+        # Clean any markdown formatting
+        json_str = re.sub(r'`{3}(?:json)?\s*', '', json_str)  # Remove ```
         json_str = json_str.strip()
 
-            # Parse JSON
+        # Parse JSON
         data = json.loads(json_str)
-
         return data
-
-
         
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
@@ -204,7 +200,7 @@ def calculate_confidence(extracted_value: str, extraction_method: str, context: 
     if extraction_method == 'regex_match':
         if '@' in extracted_value and '.' in extracted_value:
             return min(base_score + 0.05, 1.0)
-        elif re.match(r'^\+?[\d\s\-$$$$]+$', extracted_value):
+        elif re.match(r'^\+?[\d\s\-()]+$', extracted_value):
             return min(base_score + 0.05, 1.0)
     
     if context and any(header in context.lower() for header in SECTION_HEADERS):
@@ -214,13 +210,40 @@ def calculate_confidence(extracted_value: str, extraction_method: str, context: 
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    """Extract text from PDF file"""
+    """
+    Extract text from PDF with automatic OCR fallback for scanned PDFs.
+    Handles both text-based and image-based (scanned) PDFs.
+    """
     text = ""
-    with pdfplumber.open(file_path) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
+    
+    # Step 1: Try pdfplumber extraction
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+    except Exception as e:
+        print(f"pdfplumber extraction failed: {e}")
+    
+    # Step 2: If text is too short, use OCR fallback
+    if len(text.strip()) < 50:
+        if not OCR_AVAILABLE:
+            print("OCR libraries not available but needed for this PDF")
+            return text
+        
+        print("Low text content detected - applying OCR...")
+        try:
+            images = convert_from_path(file_path)
+            ocr_text = ""
+            for i, image in enumerate(images):
+                page_text = pytesseract.image_to_string(image)
+                ocr_text += f"\n--- Page {i+1} ---\n{page_text}"
+            text = ocr_text
+            print(f"OCR extraction completed: {len(text)} characters extracted")
+        except Exception as e:
+            print(f"OCR extraction failed: {e}")
+    
     return text
 
 
@@ -266,7 +289,7 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
             max_tokens=30
         )
         
-        name = response.choices[0].message.content.strip()  # <-- FIXED THIS LINE
+        name = response.choices.message.content.strip()
         name = name.replace('**', '').replace('*', '')
         name = name.strip('"').strip("'")
         
@@ -489,26 +512,3 @@ def extract_text_from_image(image_path: str) -> str:
     
     img = Image.open(image_path)
     return pytesseract.image_to_string(img)
-
-
-def extract_text_from_scanned_pdf(pdf_path: str) -> str:
-    """Extract text from scanned PDF using OCR"""
-    if not OCR_AVAILABLE:
-        return "OCR not available"
-    
-    text = ""
-    images = convert_from_path(pdf_path)
-    for img in images:
-        ocr_result = pytesseract.image_to_string(img)
-        text += ocr_result + "\n"
-    return text
-
-
-def is_scanned_pdf(pdf_path: str) -> bool:
-    """Check if PDF is scanned (image-based)"""
-    with pdfplumber.open(pdf_path) as pdf:
-        first_page = pdf.pages
-        page_text = first_page.extract_text()
-        if not page_text or len(page_text.strip()) < 30:
-            return True
-    return False
