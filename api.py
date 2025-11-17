@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from fastapi.responses import Response
 import tempfile
 import os
 from typing import List
 
-# Replace these with your actual utility and parsing modules:
+# Import your own utilities and modules:
 from parser import extract_text_from_pdf, parse_resume_with_gpt
 from parser_optimized import parse_resumes_batch
 from utils import get_cached_result, cache_result, hash_text, rate_limiter
@@ -18,26 +19,31 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# REGISTER CORS *FIRST* so preflight OPTIONS always works!
+# Always let OPTIONS requests pass for CORS (important for preflight!)
+@app.middleware("http")
+async def allow_options_requests(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response()
+    return await call_next(request)
+
+# CORS middleware must be BEFORE anything else
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://www.resumifyapi.com"],  # <- put your frontend URL, or ["*"] for testing only
+    allow_origins=["https://www.resumifyapi.com"],   # your real frontend, or ["*"] for dev
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# Rate limiting (applied AFTER CORS)
+# Add rate limiting after CORS
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Get API key from environment
+# Get the secret API key from env
 VALID_API_KEY = os.getenv("API_KEY", "demo_key_12345")
 
 def verify_api_key(x_api_key: str = Header(None)):
-    """Verify API key from header"""
     if x_api_key is None:
         raise HTTPException(status_code=401, detail="API key missing. Include X-API-Key header.")
     if x_api_key != VALID_API_KEY:
@@ -65,15 +71,12 @@ async def parse_single(
     x_api_key: str = Header(None)
 ):
     verify_api_key(x_api_key)
-    
     if not file.filename.endswith('.pdf'):
         raise HTTPException(400, "Only PDF files supported")
-    
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
-
     try:
         text = extract_text_from_pdf(tmp_path)
         text_hash = hash_text(text)
@@ -118,7 +121,6 @@ async def parse_batch(
 async def health():
     return {"status": "healthy"}
 
-# Debug endpoint to check API key
 @app.get("/debug/check-key")
 async def check_key(x_api_key: str = Header(None)):
     return {
