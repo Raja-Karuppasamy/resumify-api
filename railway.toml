@@ -4,13 +4,26 @@ builder = "nixpacks"
 [phases.setup]
 cmds = [
   "apt-get update",
-  "apt-get install -y --no-install-recommends build-essential python3-dev",
-  "apt-get install -y --no-install-recommends libffi-dev libblas-dev liblapack-dev",
-  "apt-get install -y --no-install-recommends libmagic1 libxml2-dev libxslt1-dev"
+
+  # 🚀 PDF extraction (Poppler)
+  "apt-get install -y poppler-utils",
+
+  # 🚀 OCR support (Tesseract + Leptonica)
+  "apt-get install -y tesseract-ocr",
+  "apt-get install -y libtesseract-dev libleptonica-dev",
+
+  # 🚀 Build essentials for Python libs
+  "apt-get install -y build-essential python3-dev",
+
+  # 🚀 For pdfplumber / PIL / PyMuPDF dependencies
+  "apt-get install -y libffi-dev libblas-dev liblapack-dev",
+  "apt-get install -y libmagic1 libxml2-dev libxslt1-dev"
 ]
 
 [phases.install]
-cmds = ["pip install --no-cache-dir -r requirements.txt"]
+cmds = [
+  "pip install --no-cache-dir -r requirements.txt"
+]
 
 [start]
 cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT"
