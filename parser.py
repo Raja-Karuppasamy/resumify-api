@@ -1,4 +1,4 @@
-# Updated: Nov 17, 2025 - v2.1 (OCR Support Added)
+# Updated: Nov 17, 2025 - v2.2 (OCR + OpenAI fixes)
 import re
 import json
 import pdfplumber
@@ -99,12 +99,16 @@ def get_openai_client():
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
+        # For openai==1.x this is enough; it also reads OPENAI_API_KEY from env
         _openai_client = OpenAI(api_key=api_key)
     return _openai_client
 
 
 def parse_resume_with_gpt(text: str) -> dict:
     """Use GPT-4o-mini to extract ALL resume data with high accuracy"""
+    if not text or not text.strip():
+        print("parse_resume_with_gpt called with empty text")
+        return None
     
     # Truncate text to fit in context window (8000 chars ≈ full resume)
     sample = text[:8000]
@@ -175,7 +179,7 @@ RULES:
         
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
-        print(f"Response: {json_str[:200] if 'json_str' in locals() else 'No response'}")
+        print(f"Response: {json_str[:500] if 'json_str' in locals() else 'No response'}")
         return None
     except Exception as e:
         print(f"GPT parsing error: {e}")
@@ -184,7 +188,7 @@ RULES:
 
 def calculate_confidence(extracted_value: str, extraction_method: str, context: str = "") -> float:
     """Calculate confidence score for extracted data"""
-    if not extracted_value or not extracted_value.strip():
+    if not extracted_value or not str(extracted_value).strip():
         return 0.0
     
     confidence_scores = {
@@ -198,10 +202,11 @@ def calculate_confidence(extracted_value: str, extraction_method: str, context: 
     base_score = confidence_scores.get(extraction_method, 0.5)
     
     if extraction_method == 'regex_match':
-        if '@' in extracted_value and '.' in extracted_value:
-            return min(base_score + 0.05, 1.0)
-        elif re.match(r'^\+?[\d\s\-()]+$', extracted_value):
-            return min(base_score + 0.05, 1.0)
+        if isinstance(extracted_value, str):
+            if '@' in extracted_value and '.' in extracted_value:
+                return min(base_score + 0.05, 1.0)
+            elif re.match(r'^\+?[\d\s\-()]+$', extracted_value):
+                return min(base_score + 0.05, 1.0)
     
     if context and any(header in context.lower() for header in SECTION_HEADERS):
         base_score = min(base_score + 0.1, 1.0)
@@ -257,7 +262,7 @@ def extract_email(text: str) -> Tuple[Optional[str], float]:
     """Extract first email address found with confidence"""
     matches = re.findall(EMAIL_REGEX, text)
     if matches:
-        email = matches
+        email = matches[0]  # first match
         confidence = calculate_confidence(email, 'regex_match')
         return email, confidence
     return None, 0.0
@@ -267,9 +272,15 @@ def extract_phone(text: str) -> Tuple[Optional[str], float]:
     """Extract first phone number found with confidence"""
     matches = re.findall(PHONE_REGEX, text)
     if matches:
-        phone = matches if isinstance(matches, str) else ''.join(matches)
+        first = matches[0]
+        # Regex with groups can return tuple – flatten if needed
+        if isinstance(first, tuple):
+            phone = "".join(first)
+        else:
+            phone = first
+        phone = phone.strip()
         confidence = calculate_confidence(phone, 'regex_match')
-        return phone.strip(), confidence
+        return phone, confidence
     return None, 0.0
 
 
@@ -283,13 +294,17 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
             model="gpt-4o-mini",
             messages=[{
                 "role": "user",
-                "content": f"Extract ONLY the person's full name from this resume. Return just the name, nothing else. Do not include job titles, locations, or contact info:\n\n{sample}"
+                "content": (
+                    "Extract ONLY the person's full name from this resume. "
+                    "Return just the name, nothing else. Do not include job titles, "
+                    "locations, or contact info:\n\n" + sample
+                )
             }],
             temperature=0,
             max_tokens=30
         )
         
-        name = response.choices.message.content.strip()
+        name = response.choices[0].message.content.strip()
         name = name.replace('**', '').replace('*', '')
         name = name.strip('"').strip("'")
         
@@ -313,7 +328,8 @@ def extract_name_fallback(text: str) -> Tuple[Optional[str], float]:
         
         words = line.split()
         if 2 <= len(words) <= 4:
-            if all(w.isupper() if w and w.isalpha() else False for w in words):
+            if all(w.isalpha() for w in words):
+                # Accept normal capitalised names too, not only ALLCAPS
                 return line, 0.7
     
     return None, 0.0
@@ -423,7 +439,8 @@ def extract_education(text: str) -> List[Dict]:
         if not lines:
             continue
         
-        degree = lines
+        # Fix: degree should be the first line, not the whole list
+        degree = lines[0]
         institution = ""
         start_date = ""
         end_date = ""
@@ -488,9 +505,14 @@ def extract_skills_advanced(text: str, sections: dict) -> List[Dict]:
     return list(unique_skills.values())
 
 
-def calculate_overall_confidence(name_conf: float, email_conf: float, phone_conf: float, 
-                               exp_confidences: List[float], edu_confidences: List[float], 
-                               skill_confidences: List[float]) -> float:
+def calculate_overall_confidence(
+    name_conf: float,
+    email_conf: float,
+    phone_conf: float, 
+    exp_confidences: List[float],
+    edu_confidences: List[float],
+    skill_confidences: List[float]
+) -> float:
     """Calculate overall resume parsing confidence"""
     all_confidences = [name_conf, email_conf, phone_conf]
     all_confidences.extend(exp_confidences)
