@@ -1,4 +1,4 @@
-# Updated: Nov 17, 2025 - v2.2 (OCR + OpenAI fixes)
+# Updated: Nov 17, 2025 - v2.3 (OCR + OpenAI fixes)
 import re
 import json
 import pdfplumber
@@ -99,91 +99,70 @@ def get_openai_client():
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
-        # For openai==1.x this is enough; it also reads OPENAI_API_KEY from env
         _openai_client = OpenAI(api_key=api_key)
     return _openai_client
 
 
 def parse_resume_with_gpt(text: str) -> dict:
-    """Use GPT-4o-mini to extract ALL resume data with high accuracy"""
+    """Use GPT-4o-mini to extract resume data and return valid JSON"""
     if not text or not text.strip():
         print("parse_resume_with_gpt called with empty text")
-        return None
-    
-    # Truncate text to fit in context window (8000 chars ≈ full resume)
+        return {}
+
     sample = text[:8000]
-    
-    prompt = """Extract ALL information from this resume and return ONLY valid JSON (no markdown, no explanations).
+
+    prompt = f"""
+Extract ALL information from this resume and return ONLY valid JSON.
 
 Resume text:
-""" + sample + """
+{sample}
 
 Return JSON with this EXACT structure:
-{
+{{
   "name": "Full Name",
   "email": "email@example.com",
   "phone": "(123) 456-7890",
   "location": "City, State",
-  "experience": [
-    {
-      "job_title": "Job Title",
-      "company": "Company Name",
-      "location": "City, State",
-      "start_date": "Month Year",
-      "end_date": "Month Year or Present",
-      "responsibilities": ["responsibility 1", "responsibility 2"]
-    }
-  ],
-  "education": [
-    {
-      "degree": "Degree Name",
-      "major": "Field of Study",
-      "institution": "University Name",
-      "location": "City, State",
-      "start_date": "Year",
-      "end_date": "Year"
-    }
-  ],
-  "skills": ["skill1", "skill2", "skill3"],
-  "certifications": ["cert1", "cert2"],
-  "summary": "Brief professional summary"
-}
-
-RULES:
-- Extract ALL work experience entries (don't skip any jobs)
-- Extract ALL education entries
-- Extract ALL skills mentioned (technical and soft skills)
-- If a field is missing, use null or empty array []
-- Return ONLY the JSON object, nothing else
-- Do not use markdown code blocks"""
+  "experience": [],
+  "education": [],
+  "skills": [],
+  "certifications": [],
+  "summary": ""
+}}
+"""
 
     try:
         client = get_openai_client()
-        
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=2000
+            max_tokens=2000,
         )
-        
-        json_str = response.choices[0].message.content.strip()
 
-        # Clean any markdown formatting
-        json_str = re.sub(r'`{3}(?:json)?\s*', '', json_str)  # Remove ```
-        json_str = json_str.strip()
+        # ✅ Correct access for OpenAI Python SDK 1.x
+        content = response.choices[0].message.content.strip()
 
-        # Parse JSON
-        data = json.loads(json_str)
-        return data
-        
+        # Remove accidental markdown
+        content = re.sub(r"```json|```", "", content).strip()
+
+        return json.loads(content)
+
     except json.JSONDecodeError as e:
-        print(f"JSON decode error: {e}")
-        print(f"Response: {json_str[:500] if 'json_str' in locals() else 'No response'}")
-        return None
+        print("GPT JSON decode error:", e)
+        # If model wrapped JSON in text, try to recover the first {...} block
+        try:
+            start = content.find("{")
+            end = content.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                return json.loads(content[start : end + 1])
+        except Exception as e2:
+            print("Fallback JSON extraction failed:", e2)
+        return {}
     except Exception as e:
-        print(f"GPT parsing error: {e}")
-        return None
+        print("GPT ERROR:", e)
+        return {}
 
 
 def calculate_confidence(extracted_value: str, extraction_method: str, context: str = "") -> float:
@@ -304,6 +283,7 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
             max_tokens=30
         )
         
+        # ✅ Use .content, consistent with main parser
         name = response.choices[0].message.content.strip()
         name = name.replace('**', '').replace('*', '')
         name = name.strip('"').strip("'")
@@ -439,7 +419,7 @@ def extract_education(text: str) -> List[Dict]:
         if not lines:
             continue
         
-        # Fix: degree should be the first line, not the whole list
+        # degree should be the first line
         degree = lines[0]
         institution = ""
         start_date = ""
