@@ -1,3 +1,4 @@
+print("LAUNCHED CODE VERSION: ADD-OPTIONS-MIDDLEWARE")
 from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -23,6 +24,7 @@ app = FastAPI(
 @app.middleware("http")
 async def allow_options_requests(request: Request, call_next):
     if request.method == "OPTIONS":
+        print("OPTIONS FIX ENTERED")
         return Response()
     return await call_next(request)
 
