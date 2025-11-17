@@ -8,3 +8,4 @@ pytesseract==0.3.10
 python-dotenv==1.0.0
 redis==5.0.1
 slowapi==0.1.7
+python-docx==0.8.11
