@@ -1,8 +1,10 @@
 [build]
-builder = "railpack"
+builder = "Nixpacks"
+nixpacksVersion = "1.22.0"
 
 [deploy]
-start = "python main.py"
+numReplicas = 1
+startCommand = "python main.py"
 
-[env]
-PYTHON_VERSION = "3.11"
+[build.nixpacks]
+pythonVersion = "3.11"
