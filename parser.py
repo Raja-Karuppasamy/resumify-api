@@ -96,6 +96,52 @@ def ensure_openai_key():
         raise ValueError("OPENAI_API_KEY environment variable is not set")
     openai.api_key = api_key
 
+def clean_ocr_text_with_gpt(ocr_text: str) -> str:
+    """
+    Use GPT-4o-mini to clean noisy OCR text from scanned resumes.
+    - Fixes broken words
+    - Fixes spacing / line breaks
+    - Keeps original content (no hallucinated jobs)
+    """
+    if not ocr_text or not ocr_text.strip():
+        return ocr_text
+
+    try:
+        client = get_openai_client()
+
+        prompt = f"""
+You are cleaning up noisy OCR text extracted from a resume PDF.
+
+The text may be:
+- broken into weird line breaks,
+- have missing spaces,
+- have characters like '|', '—', or misread letters,
+- but it still roughly contains the resume content.
+
+TASK:
+- Fix spacing, line breaks, and obvious OCR mistakes.
+- Reconstruct it into a clean, readable resume text.
+- KEEP all the original information (do NOT invent new jobs, dates, or skills).
+- Do NOT add explanations, just return the cleaned resume text.
+
+Here is the OCR text:
+
+{ocr_text}
+"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=4000,
+        )
+
+        cleaned = response.choices[0].message.content.strip()
+        return cleaned or ocr_text
+
+    except Exception as e:
+        print(f"clean_ocr_text_with_gpt error: {e}")
+        return ocr_text
 
 def _extract_content_from_choice(choice) -> str:
     """Handle both dict-like and typed response objects."""
@@ -199,8 +245,8 @@ def extract_text_from_pdf(file_path: str) -> str:
     Handles both text-based and image-based (scanned) PDFs.
     """
     text = ""
-    
-    # Step 1: Try pdfplumber extraction
+
+    # Step 1: Try pdfplumber extraction (best for normal PDFs)
     try:
         with pdfplumber.open(file_path) as pdf:
             for page in pdf.pages:
@@ -209,27 +255,46 @@ def extract_text_from_pdf(file_path: str) -> str:
                     text += page_text + "\n"
     except Exception as e:
         print(f"pdfplumber extraction failed: {e}")
-    
+
+    # If we already have decent text, just return it
+    if len(text.strip()) >= 200:
+        return text
+
     # Step 2: If text is too short, use OCR fallback
-    if len(text.strip()) < 50:
+    if len(text.strip()) < 200:
         if not OCR_AVAILABLE:
             print("OCR libraries not available but needed for this PDF")
             return text
-        
-        print("Low text content detected - applying OCR...")
+
+        print("Low text content detected - applying Tesseract OCR...")
         try:
             images = convert_from_path(file_path)
-            ocr_text = ""
+            raw_ocr_text = ""
+
             for i, image in enumerate(images):
                 page_text = pytesseract.image_to_string(image)
-                ocr_text += f"\n--- Page {i+1} ---\n{page_text}"
-            text = ocr_text
-            print(f"OCR extraction completed: {len(text)} characters extracted")
+                raw_ocr_text += f"\n--- Page {i+1} ---\n{page_text}"
+
+            print(f"Raw OCR extraction completed: {len(raw_ocr_text)} characters")
+
+            # Step 3: AI-clean the noisy OCR with GPT
+            print("Cleaning OCR text with GPT...")
+            cleaned_text = clean_ocr_text_with_gpt(raw_ocr_text)
+            print(f"Cleaned OCR text length: {len(cleaned_text)} characters")
+
+            # Prefer cleaned text if it's not empty
+            if cleaned_text and len(cleaned_text.strip()) > 50:
+                return cleaned_text
+
+            # Fallback: at least return raw OCR text
+            return raw_ocr_text
+
         except Exception as e:
             print(f"OCR extraction failed: {e}")
-    
-    return text
+            # As a last resort, return whatever pdfplumber extracted (even if short)
+            return text
 
+    return text
 
 def extract_text_from_docx(file_path: str) -> str:
     """Extract text from DOCX file"""
