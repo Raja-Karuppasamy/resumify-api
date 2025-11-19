@@ -33,8 +33,16 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["X-API-Key", "*"],   # 🔥 necessary for preflight
+    allow_headers=[
+        "Content-Type",
+        "X-API-Key",
+        "Authorization",
+        "Accept",
+        "Origin"
+    ],
+    expose_headers=["X-API-Key"]
 )
+
 
 
 # -------------------------------------------------------------------------
