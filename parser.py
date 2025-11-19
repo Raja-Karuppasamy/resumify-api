@@ -1,4 +1,4 @@
-# Updated: Nov 18, 2025 - v3.0 (Hybrid OCR + GPT-4o Vision + gpt-4o-mini Extraction)
+# Updated: Nov 19, 2025 - v3.1 (Fixed OpenAI 1.0+ API compatibility)
 
 import os
 import re
@@ -11,9 +11,6 @@ from io import BytesIO
 from openai import OpenAI
 from typing import List, Dict, Optional, Tuple
 
-# OpenAI compat mode (openai==0.28.1)
-import openai
-
 # Try loading OCR libraries
 try:
     import pytesseract
@@ -24,22 +21,20 @@ except Exception:
     OCR_AVAILABLE = False
     print("⚠️ OCR dependencies missing (pytesseract/pdf2image/PIL). Vision fallback will still work.")
 
-
 # -----------------------------
-# 🔐 OpenAI Key Setup
+# 🔐 OpenAI Client Setup
 # -----------------------------
-def ensure_openai_key():
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("❌ OPENAI_API_KEY is not set")
-    openai.api_key = api_key
+_client = None
 
-
-def get_openai_client():
-    ensure_openai_key()
-    return openai
-
-
+def get_openai_client() -> OpenAI:
+    """Get or create OpenAI client instance"""
+    global _client
+    if _client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("❌ OPENAI_API_KEY is not set")
+        _client = OpenAI(api_key=api_key)
+    return _client
 # -----------------------------
 # 🔠 Useful regex patterns
 # -----------------------------
@@ -49,19 +44,32 @@ PHONE_REGEX = (
     r'\d{3,4}[-.\s]?\d{4}'
 )
 
-# Skill database (same as before - abbreviated for readability here)
+# Skill database
 TECH_SKILLS = [
-    "python", "java", "react", "aws", "sql", "node.js", "docker", "linux",
-    "communication", "leadership", "microsoft office", "figma",
-    # (You can include the full list — unchanged)
+    "python", "java", "javascript", "c++", "c#", "ruby", "go", "rust", "swift", "kotlin",
+    "php", "typescript", "scala", "perl", "r", "matlab", "html", "css", "sql", "nosql",
+    "react", "angular", "vue", "node.js", "express", "django", "flask", "spring", "rails",
+    ".net", "asp.net", "laravel", "fastapi", "next.js", "nuxt.js", "svelte",
+    "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ansible", "jenkins",
+    "git", "github", "gitlab", "bitbucket", "jira", "confluence",
+    "mongodb", "postgresql", "mysql", "redis", "elasticsearch", "cassandra", "dynamodb",
+    "linux", "unix", "windows", "bash", "powershell", "vim", "emacs",
+    "machine learning", "deep learning", "nlp", "computer vision", "data science",
+    "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy", "matplotlib",
+    "agile", "scrum", "kanban", "devops", "ci/cd", "microservices", "rest", "graphql",
+    "communication", "leadership", "teamwork", "problem solving", "critical thinking",
+    "project management", "time management", "presentation", "negotiation",
+    "microsoft office", "excel", "powerpoint", "word", "outlook",
+    "figma", "sketch", "adobe xd", "photoshop", "illustrator", "indesign",
+    "seo", "sem", "google analytics", "salesforce", "hubspot", "tableau", "power bi"
 ]
 
 SECTION_HEADERS = [
     "experience", "education", "skills", "certifications",
     "projects", "work experience", "employment history",
-    "technical skills", "core competencies"
+    "technical skills", "core competencies", "professional experience",
+    "work history", "career history", "qualifications"
 ]
-
 
 # -----------------------------
 # 🔧 Utility: Base64 encode PIL image for Vision API
@@ -88,14 +96,12 @@ def pdfplumber_text_quality(text: str) -> float:
     ratio = alpha / max(total, 1)
     return ratio
 
-
 def vision_ocr_page(image: Image.Image) -> str:
     """
     Use GPT-4o Vision to read a single PDF page image.
     """
     try:
         client = get_openai_client()
-
         encoded_image = pil_to_base64(image)
 
         prompt = (
@@ -106,30 +112,28 @@ def vision_ocr_page(image: Image.Image) -> str:
             "Return ONLY the extracted text."
         )
 
-        response = client.responses.create(
-    model="gpt-4o-mini",
-    messages=[
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
                 {
-                    "type": "input_image",
-                    "image_url": encoded_image
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": encoded_image}
+                        }
+                    ]
                 }
-            ]
-        }
-    ],
-    max_output_tokens=2000,
-)
+            ],
+            max_tokens=2000,
+        )
 
-
-        return response["choices"][0]["message"]["content"].strip()
+        return response.choices[0].message.content.strip()
 
     except Exception as e:
         print(f"❌ GPT-4o Vision OCR failed: {e}")
         return ""
-
 
 def tesseract_ocr_page(image: Image.Image) -> str:
     """
@@ -138,13 +142,11 @@ def tesseract_ocr_page(image: Image.Image) -> str:
     try:
         return pytesseract.image_to_string(
             image,
-            config="--psm 6"  # Balanced for resume layouts
+            config="--psm 6"
         )
     except Exception as e:
         print(f"❌ Tesseract failed: {e}")
         return ""
-
-
 def extract_text_from_pdf(file_path: str) -> str:
     """
     Hybrid extraction:
@@ -155,14 +157,11 @@ def extract_text_from_pdf(file_path: str) -> str:
           - If low quality → GPT-4o Vision fallback
       4) Combine cleaned text
     """
-    final_text = ""
+    text = ""
 
-    # -------------------------------------
     # Step 1: Try pdfplumber textual extraction
-    # -------------------------------------
     try:
         with pdfplumber.open(file_path) as pdf:
-            text = ""
             for page in pdf.pages:
                 page_text = page.extract_text()
                 if page_text:
@@ -178,9 +177,7 @@ def extract_text_from_pdf(file_path: str) -> str:
     except Exception as e:
         print(f"❌ pdfplumber failed: {e}")
 
-    # -------------------------------------
     # Step 2: Convert PDF → images
-    # -------------------------------------
     if not OCR_AVAILABLE:
         print("❌ OCR libraries missing. Returning pdfplumber text.")
         return text if text else ""
@@ -191,15 +188,12 @@ def extract_text_from_pdf(file_path: str) -> str:
         print(f"❌ pdf2image failed: {e}")
         return text if text else ""
 
-    # -------------------------------------
     # Step 3: Per-page hybrid OCR
-    # -------------------------------------
     rebuilt_pages = []
 
     for idx, image in enumerate(images):
         print(f"\n🖼️ Processing page {idx+1}/{len(images)}")
 
-        # 3A: Tesseract first (fast)
         tesseract_text = tesseract_ocr_page(image)
         t_quality = pdfplumber_text_quality(tesseract_text)
 
@@ -210,7 +204,6 @@ def extract_text_from_pdf(file_path: str) -> str:
 
         print(f"⚠️ Tesseract too noisy (quality={t_quality:.2f}), using GPT-4o Vision fallback...")
 
-        # 3B: GPT-4o Vision fallback
         vision_text = vision_ocr_page(image)
 
         if vision_text.strip():
@@ -220,20 +213,16 @@ def extract_text_from_pdf(file_path: str) -> str:
             print("❌ Vision OCR failed → using Tesseract fallback text")
             rebuilt_pages.append(tesseract_text)
 
-    # -------------------------------------
-    # Step 4: Return final combined OCR text
-    # -------------------------------------
     combined = "\n\n".join(rebuilt_pages)
     print(f"\n🧾 Final OCR'd text length: {len(combined)} characters")
     return combined
 # ============================================================
-# 🧼 GPT Cleanup Pass (fix OCR noise without hallucinating)
+# 🧼 GPT Cleanup Pass
 # ============================================================
 
 def clean_ocr_text_with_gpt(ocr_text: str) -> str:
     """
     Cleans OCR noise but strictly avoids hallucinating content.
-    Works after hybrid OCR (Tesseract + Vision).
     """
     if not ocr_text or not ocr_text.strip():
         return ocr_text
@@ -261,22 +250,19 @@ OCR Text:
 {ocr_text}
 """
 
-        response = client.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=2000,
             temperature=0,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "user", "content": prompt}],
         )
 
-        cleaned = response["choices"][0]["message"]["content"].strip()
+        cleaned = response.choices[0].message.content.strip()
         return cleaned or ocr_text
 
     except Exception as e:
         print(f"❌ GPT cleanup failed: {e}")
         return ocr_text
-
 
 # ============================================================
 # 🧠 GPT Structured Extraction (Resume → JSON)
@@ -290,7 +276,7 @@ def parse_resume_with_gpt(text: str) -> dict:
     if not text or not text.strip():
         return {}
 
-    text_sample = text[:8000]  # safe window
+    text_sample = text[:8000]
 
     prompt = f"""
 Extract ALL information from this resume and return ONLY valid JSON.
@@ -305,6 +291,7 @@ RETURN JSON WITH THIS EXACT STRUCTURE:
   "email": "email@example.com",
   "phone": "(123) 456-7890",
   "location": "City, State",
+  "linkedin": "linkedin.com/in/username",
   "experience": [
     {{
       "job_title": "",
@@ -334,24 +321,22 @@ STRICT RULE:
 - Return ONLY raw JSON. No markdown, no backticks, no explanations.
 """
 
-    ensure_openai_key()
-
     try:
         client = get_openai_client()
-        response = client.ChatCompletion.create(
+        
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0,
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
 
-        content = response["choices"][0]["message"]["content"].strip()
-        content = re.sub(r"```json|```", "", content).strip()
+        content = response.choices[0].message.content.strip()
+        content = re.sub(r"``````", "", content).strip()
 
         try:
             return json.loads(content)
         except:
-            # Attempt recovery
             start = content.find("{")
             end = content.rfind("}")
             if start != -1 and end != -1 and end > start:
@@ -367,9 +352,7 @@ STRICT RULE:
 # ============================================================
 
 def calculate_confidence(extracted_value: str, method: str, context: str = "") -> float:
-    """
-    Basic weighted confidence score for structured classical extraction.
-    """
+    """Basic confidence score"""
     if not extracted_value:
         return 0.0
 
@@ -382,14 +365,12 @@ def calculate_confidence(extracted_value: str, method: str, context: str = "") -
 
     return weights.get(method, 0.5)
 
-
 def extract_email(text: str) -> Tuple[Optional[str], float]:
     matches = re.findall(EMAIL_REGEX, text)
     if matches:
         email = matches[0]
         return email, calculate_confidence(email, "regex")
     return None, 0.0
-
 
 def extract_phone(text: str) -> Tuple[Optional[str], float]:
     matches = re.findall(PHONE_REGEX, text)
@@ -399,17 +380,17 @@ def extract_phone(text: str) -> Tuple[Optional[str], float]:
         return phone.strip(), calculate_confidence(phone, "regex")
     return None, 0.0
 
-
 # ============================================================
-# 🧍 NAME EXTRACTION (GPT + fallback)
+# 🧍 NAME EXTRACTION
 # ============================================================
 
 def extract_name(text: str) -> Tuple[Optional[str], float]:
     sample = text[:500]
 
     try:
-        ensure_openai_key()
-        response = openai.ChatCompletion.create(
+        client = get_openai_client()
+        
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0,
             max_tokens=50,
@@ -424,7 +405,7 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
             ],
         )
 
-        name = response["choices"][0]["message"]["content"].strip()
+        name = response.choices[0].message.content.strip()
         name = name.replace("*", "").replace("**", "")
         name = name.strip('"').strip("'")
 
@@ -435,7 +416,6 @@ def extract_name(text: str) -> Tuple[Optional[str], float]:
 
     except:
         return extract_name_fallback(text)
-
 
 def extract_name_fallback(text: str) -> Tuple[Optional[str], float]:
     lines = [l.strip() for l in text.split("\n")[:10] if len(l.strip()) > 2]
@@ -448,8 +428,6 @@ def extract_name_fallback(text: str) -> Tuple[Optional[str], float]:
             return line, 0.7
 
     return None, 0.0
-
-
 # ============================================================
 # 📑 SECTION SPLITTING
 # ============================================================
@@ -478,15 +456,12 @@ def split_sections(text: str) -> Dict[str, str]:
 
     return sections
 
-
 # ============================================================
-# 💼 EXPERIENCE EXTRACTION (classical fallback)
+# 💼 EXPERIENCE EXTRACTION
 # ============================================================
 
 def extract_experience(text: str) -> List[Dict]:
-    """
-    Fallback experience extractor (GPT handles primary extraction).
-    """
+    """Fallback experience extractor"""
     if not text:
         return []
 
@@ -522,7 +497,6 @@ def extract_experience(text: str) -> List[Dict]:
 
     return experiences
 
-
 # ============================================================
 # 🎓 EDUCATION EXTRACTION
 # ============================================================
@@ -557,9 +531,8 @@ def extract_education(text: str) -> List[Dict]:
 
     return results
 
-
 # ============================================================
-# 🛠 ADVANCED SKILLS EXTRACTION
+# 🛠 SKILLS EXTRACTION
 # ============================================================
 
 def extract_skills_advanced(text: str, sections: dict) -> List[Dict]:
@@ -579,7 +552,6 @@ def extract_skills_advanced(text: str, sections: dict) -> List[Dict]:
             })
 
     return found
-
 
 # ============================================================
 # 🎯 OVERALL CONFIDENCE SCORE
