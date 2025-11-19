@@ -1,11 +1,12 @@
-fastapi
-uvicorn
-pydantic
-python-docx
-pdfplumber
-pytesseract
-pdf2image
-Pillow
-openai
-slowapi
-redis
+fastapi==0.104.1
+uvicorn==0.23.2
+pdfplumber==0.11.0
+python-docx==0.8.11
+python-dotenv==1.0.0
+openai==1.12.0
+redis==5.0.1
+pdf2image==1.17.0
+pytesseract==0.3.10
+Pillow==10.1.0
+slowapi==0.1.8
+python-multipart==0.0.9   # ← add this line (or whatever version `pip show` gave)
