@@ -8,6 +8,7 @@ import pdfplumber
 import docx
 import statistics
 from io import BytesIO
+from openai import OpenAI
 from typing import List, Dict, Optional, Tuple
 
 # OpenAI compat mode (openai==0.28.1)
@@ -105,20 +106,23 @@ def vision_ocr_page(image: Image.Image) -> str:
             "Return ONLY the extracted text."
         )
 
-        response = client.ChatCompletion.create(
-            model="gpt-4o",
-            max_tokens=2000,    # Balanced budget
-            messages=[
+        response = client.responses.create(
+    model="gpt-4o-mini",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
                 {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": encoded_image}},
-                    ],
+                    "type": "input_image",
+                    "image_url": encoded_image
                 }
-            ],
-            temperature=0,
-        )
+            ]
+        }
+    ],
+    max_output_tokens=2000,
+)
+
 
         return response["choices"][0]["message"]["content"].strip()
 
