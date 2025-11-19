@@ -18,5 +18,17 @@
     "monthly_limit": 100,
     "current_usage": 0,
     "last_reset": "2025-10-07T09:04:55.074808"
+  },
+
+  "rp_new_9xQfA7LB3tNkm2R4vYCp1dWhsGzTiEBFS5u0KMh": {
+    "key": "rp_new_9xQfA7LB3tNkm2R4vYCp1dWhsGzTiEBFS5u0KMh",
+    "user_id": "test-user",
+    "plan": "free",
+    "is_active": true,
+    "monthly_limit": 100,
+    "current_usage": 0,
+    "created_at": "2025-11-19T00:00:00Z",
+    "last_reset": "2025-11-19T00:00:00Z"
   }
+
 }
