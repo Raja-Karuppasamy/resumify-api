@@ -27,14 +27,15 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://resumifyapi.com",      # correct root domain
-        "https://www.resumifyapi.com",  # allow www
-        "http://localhost:3000"         # dev
+        "https://resumifyapi.com",
+        "https://www.resumifyapi.com",
+        "http://localhost:3000"
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["X-API-Key", "*"],   # 🔥 necessary for preflight
 )
+
 
 # -------------------------------------------------------------------------
 # Rate Limiting
