@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Security
 from fastapi.responses import JSONResponse
 from fastapi.security.api_key import APIKeyHeader
 from fastapi.openapi.utils import get_openapi
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import shutil
 import os
@@ -26,6 +27,18 @@ app = FastAPI(
     description="Professional resume parsing API with authentication, OCR, batch processing, and rate limiting.",
     version="3.0.0"
 )
+
+# ----------------------------
+# 🚀 GLOBAL CORS FIX
+# ----------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # or specify ["https://resumifyapi.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Custom OpenAPI schema for API key auth in docs
 def custom_openapi():
@@ -54,13 +67,15 @@ app.openapi = custom_openapi
 
 app.include_router(admin_router)
 
-# --- Main Endpoint ---
-@app.post("/parse-resume", response_model=ResumeParsed)
+# ----------------------------
+# MAIN ENDPOINT (POST /parse)
+# ----------------------------
+@app.post("/parse", response_model=ResumeParsed)
 async def parse_resume(
     file: UploadFile = File(...),
     current_user: APIKey = Security(get_current_user)
 ):
-    """Parse single resume with authentication and rate limiting (plus OCR support)"""
+    """Parse single resume (PDF/DOCX) with authentication + rate limiting + OCR"""
 
     check_rate_limit(current_user, 1)
 
@@ -72,42 +87,51 @@ async def parse_resume(
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        # Extract text
         if file.filename.lower().endswith(".pdf"):
             if is_scanned_pdf(temp_file_path):
                 text = extract_text_from_scanned_pdf(temp_file_path)
             else:
                 text = extract_text_from_pdf(temp_file_path)
-        elif file.filename.lower().endswith(".docx"):
-            text = extract_text_from_docx(temp_file_path)
         else:
-            raise HTTPException(status_code=400, detail="Unsupported file type")
+            text = extract_text_from_docx(temp_file_path)
 
+        # Parse sections
         sections = split_sections(text)
 
+        # Personal info extraction
         name, name_confidence = extract_name(text)
         email, email_confidence = extract_email(text)
         phone, phone_confidence = extract_phone(text)
 
-        exp_text = sections.get('experience', '') or sections.get('work experience', '') or sections.get('professional experience', '')
+        # Experience extraction
+        exp_text = (
+            sections.get('experience', '') or
+            sections.get('work experience', '') or
+            sections.get('professional experience', '')
+        )
         experience_data = extract_experience(exp_text)
         experience = [ExperienceItem(**exp) for exp in experience_data]
         exp_confidences = [exp.get('confidence', 0.0) for exp in experience_data]
 
+        # Education extraction
         edu_text = sections.get('education', '') or sections.get('academic background', '')
         education_data = extract_education(edu_text)
         education = [EducationItem(**edu) for edu in education_data]
         edu_confidences = [edu.get('confidence', 0.0) for edu in education_data]
 
+        # Skills extraction
         skills_data = extract_skills_advanced(text, sections)
         skills = [SkillItem(**skill_data) for skill_data in skills_data]
         skill_confidences = [skill_data['confidence'] for skill_data in skills_data]
 
+        # Combine confidence scores
         overall_confidence = calculate_overall_confidence(
             name_confidence, email_confidence, phone_confidence,
             exp_confidences, edu_confidences, skill_confidences
         )
 
-        increment_usage(current_user.key, 1, "parse-resume")
+        increment_usage(current_user.key, 1, "parse")
 
         return ResumeParsed(
             name=name,
@@ -121,11 +145,14 @@ async def parse_resume(
             skills=skills,
             overall_confidence=overall_confidence
         )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
+
 
 @app.get("/my-usage")
 async def get_my_usage(current_user: APIKey = Security(get_current_user)):
@@ -142,6 +169,7 @@ async def get_my_usage(current_user: APIKey = Security(get_current_user)):
         "last_reset": current_user.last_reset
     }
 
+
 @app.get("/")
 async def root():
     return {
@@ -154,6 +182,7 @@ async def root():
         "get_api_key": "/admin/create-api-key",
         "documentation": "/docs"
     }
+
 
 @app.get("/health")
 async def health_check():
