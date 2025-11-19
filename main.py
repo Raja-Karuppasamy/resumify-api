@@ -8,25 +8,28 @@ import shutil
 import os
 import uuid
 
+
 from auth import get_current_user, increment_usage, check_rate_limit, APIKey
 from admin import router as admin_router
 from parser import (
-    extract_text_from_pdf, extract_text_from_docx, extract_email,
-    extract_phone, extract_name, split_sections, extract_experience,
-    extract_education, extract_skills_advanced, calculate_overall_confidence,
-    is_scanned_pdf, extract_text_from_scanned_pdf
+    extract_text_from_pdf,
+    extract_text_from_docx,
+    parse_resume_with_gpt,
+    clean_ocr_text_with_gpt
 )
-from schemas import ResumeParsed, ExperienceItem, EducationItem, SkillItem
+
 
 # --- OpenAPI Security Setup ---
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
 
 app = FastAPI(
     title="Resume Parser API",
     description="Professional resume parsing API with authentication, OCR, batch processing, and rate limiting.",
     version="3.0.0"
 )
+
 
 # ----------------------------
 # 🚀 GLOBAL CORS FIX
@@ -42,6 +45,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Custom OpenAPI schema for API key auth in docs
 def custom_openapi():
@@ -66,14 +70,17 @@ def custom_openapi():
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
+
 app.openapi = custom_openapi
 
+
 app.include_router(admin_router)
+
 
 # ----------------------------
 # MAIN ENDPOINT (POST /parse)
 # ----------------------------
-@app.post("/parse", response_model=ResumeParsed)
+@app.post("/parse")
 async def parse_resume(
     file: UploadFile = File(...),
     current_user: APIKey = Security(get_current_user)
@@ -90,64 +97,24 @@ async def parse_resume(
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Extract text
+        # Extract text from file
         if file.filename.lower().endswith(".pdf"):
-            if is_scanned_pdf(temp_file_path):
-                text = extract_text_from_scanned_pdf(temp_file_path)
-            else:
-                text = extract_text_from_pdf(temp_file_path)
+            text = extract_text_from_pdf(temp_file_path)
         else:
             text = extract_text_from_docx(temp_file_path)
 
-        # Parse sections
-        sections = split_sections(text)
+        # Clean OCR text if needed
+        if text and len(text.strip()) > 50:
+            text = clean_ocr_text_with_gpt(text)
 
-        # Personal info extraction
-        name, name_confidence = extract_name(text)
-        email, email_confidence = extract_email(text)
-        phone, phone_confidence = extract_phone(text)
+        # Use GPT to parse all resume data
+        parsed_data = parse_resume_with_gpt(text)
 
-        # Experience extraction
-        exp_text = (
-            sections.get('experience', '') or
-            sections.get('work experience', '') or
-            sections.get('professional experience', '')
-        )
-        experience_data = extract_experience(exp_text)
-        experience = [ExperienceItem(**exp) for exp in experience_data]
-        exp_confidences = [exp.get('confidence', 0.0) for exp in experience_data]
-
-        # Education extraction
-        edu_text = sections.get('education', '') or sections.get('academic background', '')
-        education_data = extract_education(edu_text)
-        education = [EducationItem(**edu) for edu in education_data]
-        edu_confidences = [edu.get('confidence', 0.0) for edu in education_data]
-
-        # Skills extraction
-        skills_data = extract_skills_advanced(text, sections)
-        skills = [SkillItem(**skill_data) for skill_data in skills_data]
-        skill_confidences = [skill_data['confidence'] for skill_data in skills_data]
-
-        # Combine confidence scores
-        overall_confidence = calculate_overall_confidence(
-            name_confidence, email_confidence, phone_confidence,
-            exp_confidences, edu_confidences, skill_confidences
-        )
-
+        # Increment usage counter
         increment_usage(current_user.key, 1, "parse")
 
-        return ResumeParsed(
-            name=name,
-            name_confidence=name_confidence,
-            email=email,
-            email_confidence=email_confidence,
-            phone=phone,
-            phone_confidence=phone_confidence,
-            experience=experience,
-            education=education,
-            skills=skills,
-            overall_confidence=overall_confidence
-        )
+        # Return with "data" wrapper for frontend compatibility
+        return {"data": parsed_data}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
