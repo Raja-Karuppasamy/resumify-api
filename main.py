@@ -33,12 +33,15 @@ app = FastAPI(
 # ----------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # or specify ["https://resumifyapi.com"]
+    allow_origins=[
+        "https://resumifyapi.com",
+        "https://www.resumifyapi.com",
+        "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # Custom OpenAPI schema for API key auth in docs
 def custom_openapi():
